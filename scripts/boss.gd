@@ -146,7 +146,86 @@ func _process(delta: float) -> void:
     position.x = r.size.x * 0.5 + sin(OS.get_ticks_msec() / 800.0) * 60.0
 
 func _on_pattern_timeout() -> void:
+    # perform a transition pause before switching patterns; pause depends on current pattern's bullet speed
+    _start_pattern_transition()
+
+func _start_pattern_transition() -> void:
+    # base wait range (seconds)
+    var min_wait = 0.4
+    var max_wait = 1.0
+
+    # representative speed for the current pattern
+    var rep_speed = _est_pattern_speed(_pattern_index)
+
+    # compute actual min/max of bullet_speeds array
+    var actual_min = 1e9
+    var actual_max = -1e9
+    for s in bullet_speeds:
+        if s < actual_min:
+            actual_min = s
+        if s > actual_max:
+            actual_max = s
+    if actual_min == actual_max:
+        var normalized = 0.5
+    else:
+        if rep_speed <= actual_min:
+            normalized = 0.0
+        elif rep_speed >= actual_max:
+            normalized = 1.0
+        else:
+            normalized = (rep_speed - actual_min) / (actual_max - actual_min)
+    # faster rep_speed -> normalized closer to 1 -> shorter wait
+    var wait_t = lerp(max_wait, min_wait, normalized)
+    wait_t = clamp(wait_t, min_wait, max_wait)
+
+    # stop shooting, wait, then switch pattern and resume
+    if _shoot_timer and _shoot_timer.is_inside_tree():
+        _shoot_timer.stop()
+    await get_tree().create_timer(wait_t).timeout
     _pattern_index = (_pattern_index + 1) % _pattern_count
+    if _shoot_timer and _shoot_timer.is_inside_tree():
+        _shoot_timer.start()
+
+func _est_pattern_speed(idx: int) -> float:
+    # Estimate a representative bullet speed for a given pattern index.
+    # Fall back to average of bullet_speeds when pattern uses mixed or random speeds.
+    if bullet_speeds.size() == 0:
+        return 0.0
+    match idx:
+        0: # fan -> mid index
+            var mid_index = int(floor(float(bullet_sizes.size()) / 2.0))
+            return bullet_speeds[mid_index % bullet_speeds.size()]
+        1: # aimed bursts -> fastest
+            return bullet_speeds[bullet_speeds.size() - 1]
+        2: # circle burst -> average
+            var sum = 0.0
+            for s in bullet_speeds:
+                sum += s
+            return sum / float(bullet_speeds.size())
+        3: # spiral -> use average
+            var sum2 = 0.0
+            for s in bullet_speeds:
+                sum2 += s
+            return sum2 / float(bullet_speeds.size())
+        4: # double spiral -> average
+            var sum3 = 0.0
+            for s in bullet_speeds:
+                sum3 += s
+            return sum3 / float(bullet_speeds.size())
+        5: # slow dense -> slowest
+            return bullet_speeds[0]
+        6: # split burst -> mix of slow seed and fast aimed -> average of first and last
+            var first = bullet_speeds[0]
+            var last = bullet_speeds[bullet_speeds.size() - 1]
+            return (first + last) * 0.5
+        7: # odd/even -> mid
+            var mid = int(floor(float(bullet_sizes.size()) / 2.0))
+            return bullet_speeds[mid % bullet_speeds.size()]
+        _:
+            var sumdefault = 0.0
+            for s in bullet_speeds:
+                sumdefault += s
+            return sumdefault / float(bullet_speeds.size())
 
 func _on_shoot_timeout() -> void:
     match _pattern_index:
