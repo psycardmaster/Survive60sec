@@ -93,7 +93,7 @@ func set_stage(stage: int) -> void:
             _base_fan_count = 11
             _base_aimed_shots = 3
             _base_circle_count = 20
-            _pattern_count = 5
+            _pattern_count = 6 # include additional Normal-only pattern
         2:
             bullet_sizes = [3.0, 5.0, 7.0]
             bullet_speeds = [120.0, 170.0, 230.0]
@@ -102,7 +102,7 @@ func set_stage(stage: int) -> void:
             _base_fan_count = 15
             _base_aimed_shots = 5
             _base_circle_count = 30
-            _pattern_count = 6
+            _pattern_count = 7 # include extra Hard-only pattern
     # reset multiplier and dynamic counts when stage set
     _count_multiplier = 1.0
     _dynamic_fan_count = _base_fan_count
@@ -161,6 +161,8 @@ func _on_shoot_timeout() -> void:
             _pattern_double_spiral()
         5:
             _pattern_slow_dense()
+        6:
+            _pattern_split_burst()
         _:
             _pattern_fan()
 
@@ -267,6 +269,47 @@ func _pattern_slow_dense() -> void:
         var size_choice = bullet_sizes[1 if bullet_sizes.size() > 1 else 0]
         var speed_choice = bullet_speeds[0] if bullet_speeds.size() > 0 else 90.0
         _spawn_bullet(angle, speed_override=speed_choice, size_override=size_choice)
+
+func _pattern_split_burst() -> void:
+    # Hard pattern: spawn an outer circle and immediate aimed split bullets toward player
+    var base_count = max(6, int(_dynamic_circle_count / 2))
+    # spawn a circular 'seed' layer
+    for i in range(base_count):
+        var angle = TAU * float(i) / float(base_count)
+        var size_choice = bullet_sizes[1 if bullet_sizes.size() > 1 else 0]
+        var speed_choice = bullet_speeds[0] if bullet_speeds.size() > 0 else 100.0
+        _spawn_bullet(angle, speed_override=speed_choice, size_override=size_choice)
+
+    # spawn additional focused small bullets aimed at player for increased pressure
+    var player = null
+    if get_parent() and get_parent().has_node("Player"):
+        player = get_parent().get_node("Player")
+    if player != null:
+        var aimed_shots = max(3, int(_dynamic_aimed_shots))
+        var spread = deg2rad(14)
+        var dir = (player.global_position - global_position).angle()
+        for i in range(aimed_shots):
+            var offset = (float(i) - (float(aimed_shots - 1) / 2.0))
+            var angle = dir + (offset * (spread / float(max(1, aimed_shots - 1))))
+            _spawn_bullet(angle, speed_override=bullet_speeds[bullet_speeds.size() - 1], size_override=bullet_sizes[0])
+
+func _pattern_wave_shots() -> void:
+    # Normal pattern: layered wave fans that create moving wavefronts
+    var waves = 3
+    var per_wave = max(6, int(_dynamic_fan_count / 2))
+    var base = deg2rad(90)
+    var spread = deg2rad(100)
+    var t = float(OS.get_ticks_msec()) / 1000.0
+    for w in range(waves):
+        var speed_choice = bullet_speeds[w % bullet_speeds.size()]
+        var size_choice = bullet_sizes[w % bullet_sizes.size()]
+        for i in range(per_wave):
+            var denom = float(per_wave - 1) if per_wave > 1 else 1.0
+            var offset = (float(i) - (float(per_wave - 1) / 2.0))
+            # add a small time-based wobble so successive waves look shifting
+            var wobble = sin(t * (0.8 + w * 0.3) + float(i) * 0.15) * deg2rad(6)
+            var angle = base + (offset * (spread / denom)) + wobble
+            _spawn_bullet(angle, speed_override=speed_choice, size_override=size_choice)
 
 func _draw() -> void:
     # simple boss visual (rectangle + eye)
