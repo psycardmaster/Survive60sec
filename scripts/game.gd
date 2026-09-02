@@ -8,6 +8,7 @@ var time_left := duration_seconds
 var _notified_30: bool = false
 var _notified_15: bool = false
 var _last_whole_second: int = -1
+var _cleared: bool = false
 
 # audio: generator-based beep/tick system
 var _audio_gen: AudioStreamGenerator
@@ -56,8 +57,24 @@ func _process(delta: float) -> void:
         _last_whole_second = current_whole
 
     else:
-        # time up -> you win (could play a victory sound)
-        pass
+        # time up -> you win (show clear UI and options)
+        if not _cleared:
+            _cleared = true
+            print("Time's up! You cleared the game.")
+            _play_beep(1320.0, 0.5, 1.0)
+
+            # create a Control and attach the clear UI script so it can receive input even when the scene is paused
+            var ui = Control.new()
+            ui.set_script(load("res://scripts/clear_ui.gd"))
+            ui.pause_mode = Node.PAUSE_MODE_PROCESS
+            var current = get_tree().get_current_scene()
+            if current:
+                current.add_child(ui)
+            else:
+                add_child(ui)
+
+            # pause game world so gameplay stops while UI is shown
+            get_tree().paused = true
 
     # audio generation: fill available frames by mixing active beeps
     if _audio_playback and _active_beeps.size() > 0:
