@@ -1,6 +1,7 @@
 extends Control
 
 var selected_stage: int = 1 # 0=Easy,1=Normal,2=Hard
+var practice_mode: bool = false
 
 func _ready() -> void:
     # create a simple UI programmatically to avoid complex tscn edits
@@ -40,6 +41,13 @@ func _ready() -> void:
     v.add_child(btn_hard)
     btn_hard.connect("pressed", Callable(self, "_on_stage_selected"), [2])
 
+    # Practice mode checkbox (プラクティスモード)
+    var practice_check = CheckBox.new()
+    practice_check.text = "プラクティスモード"
+    practice_check.name = "PracticeCheck"
+    practice_check.connect("toggled", Callable(self, "_on_practice_toggled"))
+    v.add_child(practice_check)
+
     var start = Button.new()
     start.text = "Start"
     start.name = "StartButton"
@@ -52,6 +60,9 @@ func _ready() -> void:
 func _on_stage_selected(stage: int) -> void:
     selected_stage = stage
     _update_button_states()
+
+func _on_practice_toggled(pressed: bool) -> void:
+    practice_mode = pressed
 
 func _update_button_states() -> void:
     for child in get_children():
@@ -71,6 +82,14 @@ func _on_start_pressed() -> void:
         main.set("stage", selected_stage)
     else:
         main.stage = selected_stage
+    # if practice mode enabled, set player's debug invincible
+    if practice_mode and main.has_node("Player"):
+        var player = main.get_node("Player")
+        # set exported property; player.gd defines set_debug_invincible setter
+        if player.has_method("set_debug_invincible"):
+            player.set_debug_invincible(true)
+        else:
+            player.debug_invincible = true
     var root = get_tree().get_root()
     root.add_child(main)
     queue_free()
