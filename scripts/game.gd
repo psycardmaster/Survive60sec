@@ -37,6 +37,9 @@ func _ready():
     # initialize last whole second so ticks occur properly
     _last_whole_second = int(floor(time_left)) + 1
 
+    # start stage intro sequence (pauses game during intro)
+    start_stage()
+
 func _process(delta: float) -> void:
     if time_left > 0:
         time_left -= delta
@@ -58,8 +61,7 @@ func _process(delta: float) -> void:
         _last_whole_second = current_whole
 
     else:
-        # time up -> you win (show clear UI and options)
-        # but only if the player hasn't failed earlier
+        # time up -> you win (could play a victory sound)
         if not _cleared and not _failed:
             _cleared = true
             print("Time's up! You cleared the game.")
@@ -104,6 +106,44 @@ func _process(delta: float) -> void:
             if bb.sample_pos >= bb.total_samples:
                 _active_beeps.remove_at(j)
 
+func start_stage() -> void:
+    # pause world during intro
+    get_tree().paused = true
+
+    # prepare/reset stage variables (do not start timer yet)
+    time_left = duration_seconds
+    _notified_30 = false
+    _notified_15 = false
+    _last_whole_second = int(floor(time_left)) + 1
+    _cleared = false
+    _failed = false
+
+    # try to reset player/bullet pool if they implement a reset() method
+    if has_node("Player") and $Player.has_method("reset"):
+        $Player.reset()
+    if has_node("BulletPool") and $BulletPool.has_method("reset"):
+        $BulletPool.reset()
+
+    # create stage start UI and pass callback
+    var ui = Control.new()
+    ui.set_script(load("res://scripts/stage_start_ui.gd"))
+    ui.pause_mode = Node.PAUSE_MODE_PROCESS
+    var current = get_tree().get_current_scene()
+    if current:
+        current.add_child(ui)
+    else:
+        add_child(ui)
+    if ui.has_method("set_stage"):
+        ui.set_stage(stage)
+    if ui.has_method("set_on_done"):
+        ui.set_on_done(Callable(self, "_on_stage_started"))
+
+func _on_stage_started() -> void:
+    # unpause to start gameplay
+    get_tree().paused = false
+    _last_whole_second = int(floor(time_left)) + 1
+    print("Stage %d started" % stage)
+
 func _play_beep(freq: float, duration: float, volume: float = 0.8) -> void:
     # schedule a beep to be synthesized in _process
     var total = int(ceil(duration * _mix_rate))
@@ -111,31 +151,7 @@ func _play_beep(freq: float, duration: float, volume: float = 0.8) -> void:
     _active_beeps.append(b)
 
 func _on_player_hit() -> void:
-    # show failure UI immediately and prevent the clear UI from also appearing
-    if _failed or _cleared:
-        return
-    _failed = true
-
-    # capture remaining time BEFORE pausing or modifying it
-    var rem = time_left
-    print("Player was hit! Game over (failed). Remaining: %s" % rem)
-
+    print("Player was hit! Game over.")
+    time_left = 0
     # play a distinct 'hit' sound
     _play_beep(220.0, 0.25, 1.0)
-
-    # create and attach fail UI
-    var ui = Control.new()
-    ui.set_script(load("res://scripts/fail_ui.gd"))
-    ui.pause_mode = Node.PAUSE_MODE_PROCESS
-    var current = get_tree().get_current_scene()
-    if current:
-        current.add_child(ui)
-    else:
-        add_child(ui)
-
-    # pass remaining time to UI (fail_ui.gd implements set_remaining_time)
-    if ui.has_method("set_remaining_time"):
-        ui.set_remaining_time(rem)
-
-    # pause the game so the timer visually stops
-    get_tree().paused = true
