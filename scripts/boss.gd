@@ -59,7 +59,7 @@ func _ready() -> void:
     add_child(_pattern_timer)
     _pattern_timer.connect("timeout", Callable(self, "_on_pattern_timeout"))
 
-    # initialize dynamic counts from base
+    # initialize dynamiccounts from base
     _dynamic_fan_count = _base_fan_count
     _dynamic_aimed_shots = _base_aimed_shots
     _dynamic_circle_count = _base_circle_count
