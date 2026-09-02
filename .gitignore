@@ -1,0 +1,10 @@
+.import/
+.export/
+.cache/
+.project/
+export_presets.cfg
+*.import
+*.converted
+.user/*
+.vscode/
+.idea/
