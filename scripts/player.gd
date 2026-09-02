@@ -9,9 +9,10 @@ var invincible: bool = false
 
 func _ready() -> void:
     target_pos = position
-    # connect hit area signal
+    # connect hit area signals
     if has_node("HitArea"):
         $HitArea.connect("body_entered", Callable(self, "_on_hit_area_body_entered"))
+        $HitArea.connect("area_entered", Callable(self, "_on_hit_area_body_entered"))
     # ensure HitViz updates
     if has_node("HitViz"):
         $HitViz.update()
@@ -32,6 +33,10 @@ func _process(delta: float) -> void:
 func _on_hit_area_body_entered(body) -> void:
     if invincible:
         return
+    # destroy the colliding body (e.g., bullet) if possible
+    if body and body.is_instance_valid():
+        if body.has_method("queue_free"):
+            body.queue_free()
     invincible = true
     emit_signal("hit")
     # visual feedback: dim the hit indicator

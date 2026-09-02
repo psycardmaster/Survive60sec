@@ -12,13 +12,9 @@ func _ready():
 func _process(delta: float) -> void:
     if time_left > 0:
         time_left -= delta
-        # TODO: update UI (remaining time)
     else:
-        # Time up
-        # TODO: trigger win/score screen
         pass
 
 func _on_player_hit() -> void:
     print("Player was hit! Game over.")
     time_left = 0
-    # TODO: show lose screen
