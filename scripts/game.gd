@@ -6,6 +6,8 @@ var time_left := duration_seconds
 func _ready():
     time_left = duration_seconds
     print("Game started: survive for %s seconds" % duration_seconds)
+    if has_node("Player"):
+        $Player.connect("hit", Callable(self, "_on_player_hit"))
 
 func _process(delta: float) -> void:
     if time_left > 0:
@@ -15,3 +17,8 @@ func _process(delta: float) -> void:
         # Time up
         # TODO: trigger win/score screen
         pass
+
+func _on_player_hit() -> void:
+    print("Player was hit! Game over.")
+    time_left = 0
+    # TODO: show lose screen

@@ -1,10 +1,20 @@
 extends CharacterBody2D
 
+signal hit
+
 @export var speed: float = 600.0
 var target_pos: Vector2
+var invincible: bool = false
+@export var invincible_duration: float = 1.0
 
 func _ready() -> void:
     target_pos = position
+    # connect hit area signal
+    if has_node("HitArea"):
+        $HitArea.connect("body_entered", Callable(self, "_on_hit_area_body_entered"))
+    # ensure HitViz updates
+    if has_node("HitViz"):
+        $HitViz.update()
 
 func _process(delta: float) -> void:
     # Mobile: touch input
@@ -18,3 +28,17 @@ func _process(delta: float) -> void:
     var dir := target_pos - position
     if dir.length() > 8:
         position += dir.normalized() * speed * delta
+
+func _on_hit_area_body_entered(body) -> void:
+    if invincible:
+        return
+    invincible = true
+    emit_signal("hit")
+    # visual feedback: dim the hit indicator
+    if has_node("HitViz"):
+        $HitViz.modulate = Color(1,1,1,0.4)
+    # invincibility duration
+    await get_tree().create_timer(invincible_duration).timeout
+    invincible = false
+    if has_node("HitViz"):
+        $HitViz.modulate = Color(1,1,1,1)
