@@ -115,8 +115,11 @@ func _on_player_hit() -> void:
     if _failed or _cleared:
         return
     _failed = true
-    print("Player was hit! Game over (failed).")
-    time_left = 0
+
+    # capture remaining time BEFORE pausing or modifying it
+    var rem = time_left
+    print("Player was hit! Game over (failed). Remaining: %s" % rem)
+
     # play a distinct 'hit' sound
     _play_beep(220.0, 0.25, 1.0)
 
@@ -130,4 +133,9 @@ func _on_player_hit() -> void:
     else:
         add_child(ui)
 
+    # pass remaining time to UI (fail_ui.gd implements set_remaining_time)
+    if ui.has_method("set_remaining_time"):
+        ui.set_remaining_time(rem)
+
+    # pause the game so the timer visually stops
     get_tree().paused = true
