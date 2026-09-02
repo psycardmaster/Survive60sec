@@ -3,11 +3,13 @@ extends Area2D
 @export var radius: float = 6.0
 @export var color: Color = Color(1,0.6,0,1)
 var velocity: Vector2 = Vector2.ZERO
+var accel: Vector2 = Vector2.ZERO
 @export var despawn_margin: int = 64
 
 # Pool reference will be set by BulletPool when instantiated
 var pool = null
 var active: bool = false
+var age: float = 0.0
 
 func _ready() -> void:
     # Ensure collision shape exists
@@ -16,13 +18,16 @@ func _ready() -> void:
     update()
     connect("area_entered", Callable(self, "_on_area_entered"))
 
-func activate(pos: Vector2, vel: Vector2, r: float, col: Color) -> void:
+# accel is optional; if provided the bullet velocity will be updated by accel each frame
+func activate(pos: Vector2, vel: Vector2, r: float, col: Color, a: Vector2 = Vector2.ZERO) -> void:
     position = pos
     velocity = vel
+    accel = a
     radius = r
     color = col
     active = true
     visible = true
+    age = 0.0
     # update collision shape radius if present
     if has_node("CollisionShape2D") and $CollisionShape2D.shape and $CollisionShape2D.shape is CircleShape2D:
         $CollisionShape2D.shape.radius = radius
@@ -36,6 +41,8 @@ func deactivate() -> void:
     active = false
     visible = false
     velocity = Vector2.ZERO
+    accel = Vector2.ZERO
+    age = 0.0
     # disable monitoring to avoid stray collisions
     monitoring = false
     set_process(false)
@@ -43,6 +50,9 @@ func deactivate() -> void:
 func _process(delta: float) -> void:
     if not active:
         return
+    age += delta
+    # integrate velocity with optional acceleration
+    velocity += accel * delta
     position += velocity * delta
     var r = get_viewport_rect()
     if position.x < -despawn_margin or position.x > r.size.x + despawn_margin or position.y < -despawn_margin or position.y > r.size.y + despawn_margin:
