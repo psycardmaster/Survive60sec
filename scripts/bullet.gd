@@ -1,13 +1,14 @@
 extends Area2D
 
-@export var speed: float = 400.0
+@export var radius: float = 6.0
+@export var color: Color = Color(1,0.6,0,1)
 var velocity: Vector2 = Vector2.ZERO
-
-@export var speed_pixels: float = 400.0
 @export var despawn_margin: int = 64
 
 func _ready() -> void:
-    # ensure we draw the bullet
+    # Apply radius to collision shape if present
+    if has_node("CollisionShape2D") and $CollisionShape2D.shape and $CollisionShape2D.shape is CircleShape2D:
+        $CollisionShape2D.shape.radius = radius
     update()
     connect("area_entered", Callable(self, "_on_area_entered"))
 
@@ -23,4 +24,4 @@ func _on_area_entered(area) -> void:
         queue_free()
 
 func _draw() -> void:
-    draw_circle(Vector2.ZERO, 6.0, Color(1,0.6,0,1))
+    draw_circle(Vector2.ZERO, radius, color)
