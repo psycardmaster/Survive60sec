@@ -7,6 +7,12 @@ var accel: Vector2 = Vector2.ZERO
 @export var despawn_margin: int = 64
 @export var needle_threshold: float = 4.5 # sizes <= this are drawn as needle
 
+# homing support
+var homing: bool = false
+var homing_strength: float = 0.0
+var homing_time_left: float = 0.0
+var homing_target = null
+
 # Pool reference will be set by BulletPool when instantiated
 var pool = null
 var active: bool = false
@@ -21,8 +27,8 @@ func _ready() -> void:
     update()
     connect("area_entered", Callable(self, "_on_area_entered"))
 
-# accel is optional; if provided the bullet velocity will be updated by accel each frame
-func activate(pos: Vector2, vel: Vector2, r: float, col: Color, a: Vector2 = Vector2.ZERO) -> void:
+# accel is optional; hom_target/hom_strength/hom_duration are optional
+func activate(pos: Vector2, vel: Vector2, r: float, col: Color, a: Vector2 = Vector2.ZERO, hom_target = null, hom_strength: float = 0.0, hom_duration: float = 0.0) -> void:
     position = pos
     velocity = vel
     accel = a
@@ -32,6 +38,12 @@ func activate(pos: Vector2, vel: Vector2, r: float, col: Color, a: Vector2 = Vec
     visible = true
     age = 0.0
     _is_needle = radius <= needle_threshold
+
+    # homing setup
+    homing = hom_target != null and hom_strength > 0.0 and hom_duration > 0.0
+    homing_target = hom_target if homing else null
+    homing_strength = hom_strength
+    homing_time_left = hom_duration
 
     # update collision shape based on shape choice
     if has_node("CollisionShape2D"):
@@ -67,6 +79,11 @@ func deactivate() -> void:
     age = 0.0
     _is_needle = false
     rotation = 0.0
+    # clear homing
+    homing = false
+    homing_strength = 0.0
+    homing_time_left = 0.0
+    homing_target = null
     # disable monitoring to avoid stray collisions
     monitoring = false
     set_process(false)
@@ -75,9 +92,27 @@ func _process(delta: float) -> void:
     if not active:
         return
     age += delta
+    # homing: adjust velocity toward target direction if active
+    if homing and homing_time_left > 0.0 and homing_target and homing_target.is_inside_tree():
+        var to_target = (homing_target.global_position - position)
+        if to_target.length() > 0.01:
+            var desired = to_target.normalized() * velocity.length()
+            # interpolate velocity toward desired; homing_strength is in "per-second" units
+            var factor = clamp(homing_strength * delta, 0.0, 1.0)
+            velocity = velocity.linear_interpolate(desired, factor)
+        homing_time_left -= delta
+        if homing_time_left <= 0.0:
+            homing = false
+            homing_target = null
+
     # integrate velocity with optional acceleration
     velocity += accel * delta
     position += velocity * delta
+
+    # if needle, keep rotation aligned with velocity
+    if _is_needle and velocity.length() > 0.001:
+        rotation = velocity.angle()
+
     var r = get_viewport_rect()
     if position.x < -despawn_margin or position.x > r.size.x + despawn_margin or position.y < -despawn_margin or position.y > r.size.y + despawn_margin:
         if pool:
@@ -97,7 +132,7 @@ func _draw() -> void:
     if not active:
         return
     if _is_needle:
-        # draw a thin needle pointing to the right (rotation set in activate)
+        # draw a thin needle pointing to the right (rotation set in activate/_process)
         var len = max(12.0, radius * 6.0)
         var half_th = max(1.0, radius * 0.6)
         var p1 = Vector2(len * 0.5, 0)               # tip
@@ -107,4 +142,13 @@ func _draw() -> void:
         # optional thin outline for visibility
         draw_polyline([p1, p2, p3, p1], Color(0,0,0,0.4), 1.0)
     else:
-        draw_circle(Vector2.ZERO, radius, color)
+        # if homing and not needle, draw a distinct homing graphic (ring + dot)
+        if homing:
+            # outer ring
+            draw_circle(Vector2.ZERO, radius * 1.4, Color(0.2, 0.9, 1.0, 0.9))
+            # inner fill
+            draw_circle(Vector2.ZERO, radius * 0.9, Color(0.05, 0.35, 0.9, 1.0))
+            # center highlight
+            draw_circle(Vector2.ZERO, radius * 0.35, Color(1,1,1,0.9))
+        else:
+            draw_circle(Vector2.ZERO, radius, color)
