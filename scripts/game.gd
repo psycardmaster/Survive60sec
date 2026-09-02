@@ -1,5 +1,7 @@
 extends Node2D
 
+const SaveManager = preload("res://scripts/save_manager.gd")
+
 @export var duration_seconds: float = 60.0
 @export var stage: int = 1 # 0=Easy,1=Normal,2=Hard
 var time_left := duration_seconds
@@ -66,6 +68,9 @@ func _process(delta: float) -> void:
             _cleared = true
             print("Time's up! You cleared the game.")
             _play_beep(1320.0, 0.5, 1.0)
+
+            # record cleared stage
+            SaveManager.save_stage_cleared(stage)
 
             # create a Control and attach the clear UI script so it can receive input even when the scene is paused
             var ui = Control.new()
