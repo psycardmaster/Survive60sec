@@ -9,6 +9,7 @@ var _notified_30: bool = false
 var _notified_15: bool = false
 var _last_whole_second: int = -1
 var _cleared: bool = false
+var _failed: bool = false
 
 # audio: generator-based beep/tick system
 var _audio_gen: AudioStreamGenerator
@@ -58,7 +59,8 @@ func _process(delta: float) -> void:
 
     else:
         # time up -> you win (show clear UI and options)
-        if not _cleared:
+        # but only if the player hasn't failed earlier
+        if not _cleared and not _failed:
             _cleared = true
             print("Time's up! You cleared the game.")
             _play_beep(1320.0, 0.5, 1.0)
@@ -109,7 +111,23 @@ func _play_beep(freq: float, duration: float, volume: float = 0.8) -> void:
     _active_beeps.append(b)
 
 func _on_player_hit() -> void:
-    print("Player was hit! Game over.")
+    # show failure UI immediately and prevent the clear UI from also appearing
+    if _failed or _cleared:
+        return
+    _failed = true
+    print("Player was hit! Game over (failed).")
     time_left = 0
     # play a distinct 'hit' sound
     _play_beep(220.0, 0.25, 1.0)
+
+    # create and attach fail UI
+    var ui = Control.new()
+    ui.set_script(load("res://scripts/fail_ui.gd"))
+    ui.pause_mode = Node.PAUSE_MODE_PROCESS
+    var current = get_tree().get_current_scene()
+    if current:
+        current.add_child(ui)
+    else:
+        add_child(ui)
+
+    get_tree().paused = true
