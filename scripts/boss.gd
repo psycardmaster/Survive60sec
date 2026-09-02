@@ -33,6 +33,7 @@ var _bullet_scene: PackedScene
 var _pattern_index: int = 0
 var _spiral_angle: float = 0.0
 var _pattern_count: int = 6
+var _odd_even_toggle: bool = true
 
 func _ready() -> void:
     randomize()
@@ -163,6 +164,8 @@ func _on_shoot_timeout() -> void:
             _pattern_slow_dense()
         6:
             _pattern_split_burst()
+        7:
+            _pattern_odd_even()
         _:
             _pattern_fan()
 
