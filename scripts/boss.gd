@@ -8,10 +8,24 @@ extends Node2D
 @export var bullet_sizes: Array = [4.0, 6.0, 10.0]
 @export var bullet_speeds: Array = [90.0, 130.0, 180.0]
 
+# difficulty scaling for counts (multiplier cap)
+@export var difficulty_count_max: float = 2.0
+
 # pattern parameters (defaults)
-var _fan_count: int = 11
-var _aimed_shots: int = 3
-var _circle_count: int = 20
+var _base_fan_count: int = 11
+var _base_aimed_shots: int = 3
+var _base_circle_count: int = 20
+
+# runtime dynamic values
+var _dynamic_fan_count: int
+var _dynamic_aimed_shots: int
+var _dynamic_circle_count: int
+var _count_multiplier: float = 1.0
+
+# hard caps to avoid overload
+var _fan_max: int = 48
+var _aimed_max: int = 16
+var _circle_max: int = 60
 
 var _shoot_timer: Timer
 var _pattern_timer: Timer
@@ -44,6 +58,21 @@ func _ready() -> void:
     add_child(_pattern_timer)
     _pattern_timer.connect("timeout", Callable(self, "_on_pattern_timeout"))
 
+    # initialize dynamic counts from base
+    _dynamic_fan_count = _base_fan_count
+    _dynamic_aimed_shots = _base_aimed_shots
+    _dynamic_circle_count = _base_circle_count
+
+    # connect to game countdown signals from parent (Main)
+    var main = get_parent()
+    if main:
+        if main.has_signal("notify_30"):
+            main.connect("notify_30", Callable(self, "_on_notify_30"))
+        if main.has_signal("notify_15"):
+            main.connect("notify_15", Callable(self, "_on_notify_15"))
+        if main.has_signal("countdown_tick"):
+            main.connect("countdown_tick", Callable(self, "_on_countdown_tick"))
+
 func set_stage(stage: int) -> void:
     # 0 = Easy, 1 = Normal, 2 = Hard
     match stage:
@@ -52,33 +81,63 @@ func set_stage(stage: int) -> void:
             bullet_speeds = [70.0, 110.0]
             shoot_interval = 0.9
             pattern_duration = 7.0
-            _fan_count = 7
-            _aimed_shots = 2
-            _circle_count = 12
+            _base_fan_count = 7
+            _base_aimed_shots = 2
+            _base_circle_count = 12
             _pattern_count = 4
         1:
             bullet_sizes = [4.0, 6.0, 8.0]
             bullet_speeds = [90.0, 130.0, 180.0]
             shoot_interval = 0.7
             pattern_duration = 6.0
-            _fan_count = 11
-            _aimed_shots = 3
-            _circle_count = 20
+            _base_fan_count = 11
+            _base_aimed_shots = 3
+            _base_circle_count = 20
             _pattern_count = 5
         2:
             bullet_sizes = [3.0, 5.0, 7.0]
             bullet_speeds = [120.0, 170.0, 230.0]
             shoot_interval = 0.55
             pattern_duration = 5.0
-            _fan_count = 15
-            _aimed_shots = 5
-            _circle_count = 30
+            _base_fan_count = 15
+            _base_aimed_shots = 5
+            _base_circle_count = 30
             _pattern_count = 6
-    # update timers if already created
+    # reset multiplier and dynamic counts when stage set
+    _count_multiplier = 1.0
+    _dynamic_fan_count = _base_fan_count
+    _dynamic_aimed_shots = _base_aimed_shots
+    _dynamic_circle_count = _base_circle_count
+    # update timers
     if _shoot_timer and _shoot_timer.is_inside_tree():
         _shoot_timer.wait_time = shoot_interval
     if _pattern_timer and _pattern_timer.is_inside_tree():
         _pattern_timer.wait_time = pattern_duration
+
+func _on_notify_30() -> void:
+    # small immediate increase
+    _apply_multiplier(1.12)
+
+func _on_notify_15() -> void:
+    # larger immediate increase
+    _apply_multiplier(1.22)
+
+func _on_countdown_tick(remaining_sec: int) -> void:
+    # when countdown ticks (10..1), accelerate counts multiplicatively
+    if remaining_sec <= 10 and remaining_sec >= 1:
+        # per-tick multiplier; choose gentle growth so overall capped by difficulty_count_max
+        var per_tick = 1.08
+        _apply_multiplier(per_tick)
+
+func _apply_multiplier(mult: float) -> void:
+    _count_multiplier *= mult
+    _count_multiplier = min(_count_multiplier, difficulty_count_max)
+    # recompute dynamic counts and clamp to max
+    _dynamic_fan_count = clamp(int(round(float(_base_fan_count) * _count_multiplier)), 1, _fan_max)
+    _dynamic_aimed_shots = clamp(int(round(float(_base_aimed_shots) * _count_multiplier)), 1, _aimed_max)
+    _dynamic_circle_count = clamp(int(round(float(_base_circle_count) * _count_multiplier)), 1, _circle_max)
+    # debug print
+    #print("[Boss] count_multiplier=", _count_multiplier, "fan=", _dynamic_fan_count, "aimed=", _dynamic_aimed_shots, "circle=", _dynamic_circle_count)
 
 func _process(delta: float) -> void:
     # subtle horizontal bobbing for visual motion, stays on screen
@@ -131,15 +190,14 @@ func _spawn_bullet(angle_radians: float, speed_override: float = 0.0, size_overr
         if b.has_method("activate"):
             b.activate(global_position, vel, size, col)
         else:
-            # best-effort fallback
             b.position = global_position
             b.velocity = vel
             b.radius = size
             b.color = col
 
 func _pattern_fan() -> void:
-    # wide fan downward using _fan_count
-    var count = max(1, _fan_count)
+    # wide fan downward using dynamic fan count
+    var count = max(1, _dynamic_fan_count)
     var base = deg2rad(90)
     var spread = deg2rad(120)
     for i in range(count):
@@ -159,7 +217,7 @@ func _pattern_aimed_bursts() -> void:
     if player == null:
         return
     var dir = (player.global_position - global_position).angle()
-    var shots = max(1, _aimed_shots)
+    var shots = max(1, _dynamic_aimed_shots)
     var spread = deg2rad(8)
     for i in range(shots):
         var offset = (float(i) - (float(shots - 1) / 2.0))
@@ -169,8 +227,8 @@ func _pattern_aimed_bursts() -> void:
         _spawn_bullet(angle, speed_override=fast, size_override=small)
 
 func _pattern_circle_burst() -> void:
-    # circular burst using _circle_count bullets, mixed sizes and speeds
-    var count = max(1, _circle_count)
+    # circular burst using dynamic circle count, mixed sizes and speeds
+    var count = max(1, _dynamic_circle_count)
     for i in range(count):
         var angle = TAU * float(i) / float(count)
         var size_choice = bullet_sizes[i % bullet_sizes.size()]
@@ -183,7 +241,6 @@ func _pattern_spiral() -> void:
     var gap = deg2rad(10)
     for i in range(per_tick):
         var angle = _spiral_angle + i * gap
-        # small-medium speed/size
         _spawn_bullet(angle, size_override=bullet_sizes[0])
     _spiral_angle += deg2rad(8)
 
@@ -194,13 +251,13 @@ func _pattern_double_spiral() -> void:
     for i in range(per_tick):
         var angle1 = _spiral_angle + i * gap
         var angle2 = -_spiral_angle + i * gap
-        _spawn_bullet(angle1, size_override=bullet_sizes[1])
-        _spawn_bullet(angle2, size_override=bullet_sizes[1])
+        _spawn_bullet(angle1, size_override=bullet_sizes[1 if bullet_sizes.size() > 1 else 0])
+        _spawn_bullet(angle2, size_override=bullet_sizes[1 if bullet_sizes.size() > 1 else 0])
     _spiral_angle += deg2rad(12)
 
 func _pattern_slow_dense() -> void:
     # dense curtain of slower bullets filling a wide band
-    var count = max(6, int(_fan_count * 1.2))
+    var count = max(6, int(_base_fan_count * 1.2))
     var base = deg2rad(90)
     var spread = deg2rad(60)
     for i in range(count):
