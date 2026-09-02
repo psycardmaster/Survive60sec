@@ -178,7 +178,7 @@ func _spawn_bullet(angle_radians: float, speed_override: float = 0.0, size_overr
     var vel = Vector2(cos(angle_radians), sin(angle_radians)).normalized() * spd
 
     # color by size
-    var col = Color(1,1,0.2,1) if size <= 4.0 else (Color(1,0.6,0,1) if size <= 6.0 else Color(1,0.2,0.2,1))
+    var col = Color(0.2,0.8,1,1) if size <= 4.0 else (Color(1,1,1,1) if size <= 6.0 else Color(1,0.9,0.6,1))
 
     if pool:
         var b = pool.get_bullet()
