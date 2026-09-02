@@ -1,4 +1,4 @@
 [application]
 config_version=4
 config/name="Survive60sec"
-run/main_scene="res://scenes/Main.tscn"
+run/main_scene="res://scenes/Title.tscn"
